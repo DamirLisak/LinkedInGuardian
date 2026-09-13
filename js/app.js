@@ -207,20 +207,36 @@ function providerEndpoint(p) {
    LLM client — unified chat() across providers
 ------------------------------------------------------------ */
 const LLM = {
-  async chat(system, user, { maxTokens = 4000, temperature = 0.2 } = {}) {
+  lastFinishReason: null,
+
+  async chat(system, user, { maxTokens = 4000, temperature = 0.2, _allowRetry = true } = {}) {
     const p = Settings.data.provider;
     const def = PROVIDERS[p];
     const key = Settings.data.apiKey;
     const model = Settings.data.model || def.defaultModel;
     const urls = providerEndpoint(p);
+    this.lastFinishReason = null;
 
+    let text;
     if (def.native === "gemini") {
-      return this._gemini(urls.chat, key, model, system, user, maxTokens, temperature);
+      text = await this._gemini(urls.chat, key, model, system, user, maxTokens, temperature);
+    } else if (def.native === true) {
+      text = await this._anthropic(urls.chat, key, model, system, user, maxTokens, temperature);
+    } else {
+      text = await this._openaiCompatible(urls.chat, def.headers(key), model, system, user, maxTokens, temperature);
     }
-    if (def.native === true) {
-      return this._anthropic(urls.chat, key, model, system, user, maxTokens, temperature);
+
+    // Reasoning models can burn the whole token budget on hidden thinking and
+    // get the actual JSON answer truncated (finish_reason "length"). Retry
+    // once with a doubled budget before giving up.
+    if (this.lastFinishReason === "length" && _allowRetry && maxTokens < 16000) {
+      return this.chat(system, user, {
+        maxTokens: Math.min(maxTokens * 2, 16000),
+        temperature,
+        _allowRetry: false
+      });
     }
-    return this._openaiCompatible(urls.chat, def.headers(key), model, system, user, maxTokens, temperature);
+    return text;
   },
 
   async _openaiCompatible(url, headers, model, system, user, maxTokens, temperature) {
@@ -240,6 +256,7 @@ const LLM = {
     if (!res.ok) throw await httpError(res);
     const data = await res.json();
     const msg = data.choices?.[0]?.message;
+    LLM.lastFinishReason = data.choices?.[0]?.finish_reason || null;
     // Reasoning models (vLLM, DeepSeek, GLM …) may put the answer in content
     // and the thinking in reasoning_content/reasoning — or, if the token
     // budget was consumed by thinking, leave content empty entirely.
@@ -629,8 +646,55 @@ function extractJson(text) {
   if (fenced) text = fenced[1];
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
-  if (start === -1 || end === -1) throw new Error("The AI response did not contain JSON.");
-  return JSON.parse(text.slice(start, end + 1));
+  if (start === -1) throw new Error("The AI response did not contain JSON.");
+
+  const candidate = text.slice(start, end >= start ? end + 1 : undefined);
+  try {
+    return JSON.parse(candidate);
+  } catch (error) {
+    // A response stopped by the provider's output limit can be missing only
+    // its closing strings, arrays, or object braces. Repair only that narrow
+    // case; do not invent missing field values or silently hide malformed JSON.
+    if (LLM.lastFinishReason !== "length") throw error;
+    const repaired = repairTruncatedJson(candidate);
+    if (!repaired) throw error;
+    return JSON.parse(repaired);
+  }
+}
+
+function repairTruncatedJson(candidate) {
+  let value = candidate.trim();
+  if (!value.startsWith("{") || /:\s*$/.test(value)) return null;
+
+  // Remove a dangling comma, then close an unterminated JSON string.
+  value = value.replace(/,\s*$/, "");
+  let escaped = false;
+  let inString = false;
+  for (const char of value) {
+    if (char === "\\" && !escaped) {
+      escaped = true;
+      continue;
+    }
+    if (char === '"' && !escaped) inString = !inString;
+    escaped = false;
+  }
+  if (inString) value += '"';
+
+  const open = [];
+  escaped = false;
+  inString = false;
+  for (const char of value) {
+    if (char === "\\" && !escaped) {
+      escaped = true;
+      continue;
+    }
+    if (char === '"' && !escaped) inString = !inString;
+    if (!inString && (char === "{" || char === "[")) open.push(char);
+    if (!inString && (char === "}" || char === "]")) open.pop();
+    escaped = false;
+  }
+  while (open.length) value += open.pop() === "{" ? "}" : "]";
+  return value;
 }
 
 /* ------------------------------------------------------------
