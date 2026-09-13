@@ -354,21 +354,40 @@ const LinkedInData = {
    */
   async fetch(parsed, onNote) {
     const mode = Settings.data.liMode;
+    let result = null;
 
     if (mode === "token" && Settings.data.liToken) {
       try {
-        return await this.viaToken(parsed, onNote);
+        result = await this.viaToken(parsed, onNote);
       } catch (e) {
-        onNote(`LinkedIn API request failed (${e.message}) — falling back to public research mode.`);
+        onNote(`LinkedIn API request failed (${e.message}) — falling back to public page fetch.`);
       }
     }
-    if (mode === "proxy" && Settings.data.liProxy) {
+    if (!result && mode === "proxy" && Settings.data.liProxy) {
       try {
-        return await this.viaProxy(parsed, onNote);
+        result = await this.viaProxy(parsed, onNote);
       } catch (e) {
         onNote(`Proxy request failed (${e.message}) — falling back to public page fetch.`);
       }
     }
+
+    // API/proxy data is often thin — the OIDC endpoints return only identity
+    // metadata (name, email, photo, locale), never headline/experience/posts.
+    // Best-effort enrichment with the public guest page.
+    if (result) {
+      try {
+        const pub = await this.viaPublicFetch(parsed, onNote, parsed.originalUrl);
+        onNote("Enriched API data with public page content.");
+        return {
+          source: result.source + " + public page",
+          text: result.text + "\n\n=== ADDITIONAL PUBLIC PAGE CONTENT ===\n" + pub.text,
+          note: result.note + " Enriched with public page content."
+        };
+      } catch {
+        return result; // enrichment is optional — keep the API data
+      }
+    }
+
     // Public mode (and fallback): fetch the public LinkedIn page content so the
     // model has real data instead of relying on its training knowledge.
     try {
@@ -387,24 +406,80 @@ const LinkedInData = {
   async viaToken(parsed, onNote) {
     onNote("Calling LinkedIn API with your access token…");
     const token = Settings.data.liToken;
-    const base = "https://api.linkedin.com/v2";
-    const headers = { "Authorization": `Bearer ${token}`, "X-Restli-Protocol-Version": "2.0.0" };
+    const headers = {
+      "Authorization": `Bearer ${token}`,
+      "X-Restli-Protocol-Version": "2.0.0",
+      "LinkedIn-Version": "202401"
+    };
 
-    let text = "";
+    // Single request with precise error diagnosis (CORS vs. auth vs. scopes).
+    const attempt = async (url, label) => {
+      let res;
+      try {
+        res = await fetch(url, { headers });
+      } catch {
+        throw new Error(
+          `${label}: request blocked by browser (CORS/network). api.linkedin.com does not ` +
+          "allow direct browser calls from most origins — use the CORS proxy mode instead."
+        );
+      }
+      if (!res.ok) {
+        const err = await httpError(res);
+        if (res.status === 401) {
+          throw new Error(`${label}: 401 — token invalid or expired. Regenerate it at linkedin.com/developers/tools/oauth.`);
+        }
+        if (res.status === 403) {
+          throw new Error(
+            `${label}: 403 — token lacks the required scope/permission. When generating the token, ` +
+            "check ALL scopes (openid, profile, email). Your token's permissions are shown on the token details page."
+          );
+        }
+        throw err;
+      }
+      return res.json();
+    };
+
     if (parsed.type === "member") {
-      // /me requires the r_liteprofile scope on the token owner — for third parties
-      // we can only try the public profile lookup, which often 403s. We still try.
-      const res = await fetch(`${base}/me?projection=(id,firstName,lastName,headline,vanityName)`, { headers });
-      if (!res.ok) throw await httpError(res);
-      const me = await res.json();
-      text += `LinkedIn API /me response:\n${JSON.stringify(me, null, 2)}\n`;
-    } else {
-      const res = await fetch(`${base}/organizations/${encodeURIComponent(parsed.slug)}`, { headers });
-      if (!res.ok) throw await httpError(res);
-      const org = await res.json();
-      text += `LinkedIn API organization response:\n${JSON.stringify(org, null, 2)}\n`;
+      // LinkedIn's official API only exposes the TOKEN OWNER's profile
+      // (/v2/me for legacy scopes, /v2/userinfo for OIDC scopes). There is
+      // NO endpoint to look up arbitrary third-party members by vanity name.
+      const errors = [];
+      let me = null;
+      let endpoint = "";
+      try {
+        me = await attempt(
+          "https://api.linkedin.com/v2/me?projection=(id,firstName,lastName,headline,vanityName)",
+          "/v2/me"
+        );
+        endpoint = "/v2/me";
+      } catch (e) { errors.push(e.message); }
+      if (!me) {
+        try {
+          me = await attempt("https://api.linkedin.com/v2/userinfo", "/v2/userinfo");
+          endpoint = "/v2/userinfo (OIDC)";
+        } catch (e) { errors.push(e.message); }
+      }
+      if (!me) throw new Error("LinkedIn API failed → " + errors.join(" | "));
+
+      onNote("Note: the LinkedIn API only returns the token owner's own profile — third-party member lookup does not exist.");
+      return {
+        source: `LinkedIn API (${endpoint})`,
+        text: `LinkedIn API response for the TOKEN OWNER (not necessarily the checked URL):\n${JSON.stringify(me, null, 2)}\n`,
+        note: "Data retrieved via LinkedIn API token (own profile only)."
+      };
     }
-    return { source: "LinkedIn API (token)", text, note: "Data retrieved via LinkedIn API token." };
+
+    // Company lookup by vanity name — requires the "Community Management API"
+    // product on your app plus admin rights on that LinkedIn page.
+    const org = await attempt(
+      `https://api.linkedin.com/v2/organizations?q=vanityName&vanityName=${encodeURIComponent(parsed.slug)}`,
+      "/v2/organizations"
+    );
+    return {
+      source: "LinkedIn API (organization lookup)",
+      text: `LinkedIn API organization response for "${parsed.slug}":\n${JSON.stringify(org, null, 2)}\n`,
+      note: "Company data retrieved via LinkedIn API token."
+    };
   },
 
   /** User-hosted CORS proxy that injects credentials server-side. */
@@ -728,6 +803,8 @@ async function runCheck(urlValue) {
 
     // Manual paste always wins
     const manual = ($("manualPaste")?.value || "").trim();
+    const notes = [];
+    const noteFn = (n) => { notes.push(n); Progress.set(30, n); };
     let data;
     if (manual.length >= 80) {
       data = {
@@ -737,18 +814,22 @@ async function runCheck(urlValue) {
       };
       Progress.set(38, "Using manually pasted profile text.");
     } else {
-      data = await LinkedInData.fetch(parsed, (n) => Progress.set(30, n));
+      data = await LinkedInData.fetch(parsed, noteFn);
     }
     Progress.done("fetch");
     Progress.set(40, `Data source: ${data.source}`);
 
-    // If we ended up with no real data, guide the user to the manual paste.
+    // If we ended up with no real data, guide the user to the manual paste —
+    // including WHY automatic access failed (collected notes).
     if (!data.text) {
       $("pasteDetails").open = true;
       $("manualPaste").focus();
+      const reasons = notes.length ? "<br><br><strong>What happened:</strong><br>• " +
+        notes.map(esc).join("<br>• ") : "";
       showInfo(
-        "LinkedIn blocked automated access (login wall). The AI will assess only what it knows about this profile — " +
-        "for a reliable result, open the profile in another tab, copy the visible text and paste it into the field above the check button."
+        "No profile content could be retrieved for this URL — LinkedIn blocked automated access. " +
+        "For a reliable analysis, open the profile in another tab (logged in), copy the visible text " +
+        "and paste it into the field above the check button." + reasons
       );
     }
 
