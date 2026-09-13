@@ -244,6 +244,19 @@
       </details>
 
       <details class="faq-item">
+        <summary>Why can't some profiles be fetched automatically?</summary>
+        <div class="faq-body">
+          <p>LinkedInGuardian's automatic fetch relies on LinkedIn's <em>logged-out guest pages</em>, and LinkedIn serves those only selectively:</p>
+          <ul>
+            <li><strong>URL path:</strong> guest pages exist only at the bare vanity URL (<code>/in/name/</code>, <code>/company/name/</code>). Sub-pages like <code>/home/</code> or <code>/about/</code> always redirect logged-out visitors to a login wall. The app tries the bare URL automatically.</li>
+            <li><strong>Profile prominence:</strong> the "Public visibility" switch is necessary but not sufficient — LinkedIn only serves guest pages for profiles in its public index (high-profile members, active company pages). A regular member profile gets the auth wall even when viewed logged-out in a normal browser.</li>
+            <li><strong>Bot detection:</strong> datacenter IPs used by reader proxies are throttled, so results can vary over time.</li>
+          </ul>
+          <p>For restricted profiles, paste the profile text manually (open the profile logged-in, copy the visible text) or run the <a href="https://github.com/DamirLisak/LinkedInGuardian/blob/main/docs/PROXY.md" target="_blank" rel="noopener noreferrer">CORS proxy</a> with your own LinkedIn token.</p>
+        </div>
+      </details>
+
+      <details class="faq-item">
         <summary>Can I use this to check my own profile?</summary>
         <div class="faq-body">
           <p>Yes — many people run themselves through the checker to see how their profile reads to a skeptical potential client.</p>

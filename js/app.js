@@ -338,6 +338,7 @@ function parseLinkedInUrl(input) {
   }
 
   out.valid = true;
+  out.originalUrl = input.trim();
   out.canonical = out.type === "member"
     ? `https://www.linkedin.com/in/${encodeURIComponent(out.slug)}/`
     : `https://www.linkedin.com/company/${encodeURIComponent(out.slug)}/`;
@@ -371,9 +372,13 @@ const LinkedInData = {
     // Public mode (and fallback): fetch the public LinkedIn page content so the
     // model has real data instead of relying on its training knowledge.
     try {
-      return await this.viaPublicFetch(parsed, onNote);
+      return await this.viaPublicFetch(parsed, onNote, parsed.originalUrl);
     } catch (e) {
-      onNote(`Automatic public-page fetch failed (${e.message}) — using AI-knowledge mode. Tip: paste the profile text manually below the URL field.`);
+      const isWall = /login wall/i.test(e.message);
+      const tip = isWall
+        ? " This profile's public visibility is restricted or LinkedIn flagged the automated access — paste the profile text manually below the URL field for a reliable analysis."
+        : " Tip: paste the profile text manually below the URL field.";
+      onNote(`Automatic public-page fetch failed (${e.message}).${tip}`);
       return this.viaPublicResearch(parsed, onNote);
     }
   },
@@ -420,17 +425,47 @@ const LinkedInData = {
    * Fetch the public LinkedIn page through the r.jina.ai reader proxy
    * (free, CORS-enabled, no key required for basic use). This gives the
    * model real profile content: name, headline, about, experience, posts.
+   *
+   * LinkedIn only serves public guest pages at BARE vanity URLs
+   * (/in/name/, /company/name/) — sub-pages (/home/, /about/, …) redirect
+   * guests to a login wall. We therefore try the canonical bare URL first,
+   * then the original URL as a fallback, with one retry (bot detection is
+   * sometimes transient).
    */
-  async viaPublicFetch(parsed, onNote) {
+  async viaPublicFetch(parsed, onNote, originalUrl) {
     onNote("Fetching public LinkedIn page content…");
-    const readerUrl = `https://r.jina.ai/${parsed.canonical}`;
-    const res = await fetch(readerUrl, { headers: { "Accept": "text/plain" } });
-    if (!res.ok) throw await httpError(res);
-    const body = await res.text();
 
-    // Detect LinkedIn auth walls / empty renders. Real profile pages contain
-    // signals like "Experience", "Education", "Connect" — auth walls do not.
+    const candidates = [...new Set([
+      parsed.canonical,
+      (originalUrl || "").trim().replace(/\/+$/, "") + "/"
+    ])].filter(Boolean);
+
+    let lastErr = null;
+    for (const url of candidates) {
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          const res = await fetch(`https://r.jina.ai/${url}`, { headers: { "Accept": "text/plain" } });
+          if (!res.ok) throw await httpError(res);
+          const body = await res.text();
+          this._assertNotWall(body);
+          return {
+            source: `Public page fetch (r.jina.ai) — ${url}`,
+            text: `Public LinkedIn page content for ${url}:\n\n${body.slice(0, 14000)}`,
+            note: `Fetched ${body.length.toLocaleString()} characters of public page content.`
+          };
+        } catch (e) {
+          lastErr = e;
+          if (attempt < 2) await sleep(1200); // brief pause before retry
+        }
+      }
+    }
+    throw lastErr || new Error("Public page fetch failed");
+  },
+
+  /** Throws if the response is a LinkedIn login/sign-up wall instead of a profile. */
+  _assertNotWall(body) {
     const low = body.toLowerCase();
+    // Real profile pages contain signals like "Experience", "Education" — walls do not.
     const wallMarkers = ["sign up | linkedin", "sign in | linkedin", "join linkedin", "sign in or join"];
     const profileSignals = ["experience", "education", "connections", "followers", "about us", "company size", "products"];
     const isWall = wallMarkers.some((m) => low.includes(m)) &&
@@ -438,12 +473,6 @@ const LinkedInData = {
     if (body.trim().length < 400 || isWall) {
       throw new Error("LinkedIn returned a login wall instead of profile content");
     }
-
-    return {
-      source: "Public page fetch (r.jina.ai)",
-      text: `Public LinkedIn page content for ${parsed.canonical}:\n\n${body.slice(0, 14000)}`,
-      note: `Fetched ${body.length.toLocaleString()} characters of public page content.`
-    };
   },
 
   /**

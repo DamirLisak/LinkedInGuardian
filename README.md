@@ -66,6 +66,37 @@ python3 -m http.server 8080
 Your key is sent **only** from your browser to the provider you selected. This site has no
 server that could see it.
 
+## 🔍 Data access & limitations (why some profiles can't be fetched automatically)
+
+LinkedInGuardian's automatic public fetch works through LinkedIn's **logged-out "guest pages"**,
+and LinkedIn decides per profile whether to serve them:
+
+| Test | Result |
+|---|---|
+| `linkedin.com/in/williamhgates/` (logged out) | ✅ full public page served |
+| `linkedin.com/company/gipsoft/` (logged out, bare URL) | ✅ full public page served |
+| `linkedin.com/company/gipsoft/home/` | ❌ login wall (deep links always wall guests) |
+| Regular member profiles (e.g. low-activity accounts) | ❌ login wall, even with visibility ON |
+
+Three factors stack up:
+
+1. **URL path** — guest pages exist only at the *bare* vanity URL (`/in/name/`, `/company/name/`).
+   Sub-pages (`/home/`, `/about/`, `/posts/`) always redirect logged-out visitors to the auth wall.
+   LinkedInGuardian automatically tries the bare URL first.
+2. **Profile prominence in LinkedIn's public index** — the "Public visibility" switch is
+   necessary but **not sufficient**. LinkedIn only serves guest pages for profiles it considers
+   worth serving (high-profile members, active company pages). A regular member profile gets the
+   auth wall even when viewed logged-out from a residential browser — verified independently of
+   any bot detection.
+3. **Bot detection** — datacenter IPs (used by reader proxies) are throttled aggressively, and
+   the same URL may succeed or fail at different times.
+
+**Consequence:** automatic fetching works for prominent members and most company pages, but not
+for every profile. For reliable results with restricted profiles, use the **manual paste field**
+(open the profile logged-in, copy the visible text) or run the
+[CORS proxy](docs/PROXY.md) with your own LinkedIn token. This is LinkedIn's privacy design —
+not a bug in LinkedInGuardian.
+
 ## 🏗 Project structure
 
 ```
