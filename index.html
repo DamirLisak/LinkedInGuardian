@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LinkedInGuardian — LinkedIn Trustworthiness Checker</title>
+<meta name="description" content="Assess the trustworthiness of LinkedIn members and companies with an AI analysis of their public profile and posts. 100% client-side — your API keys never leave your browser.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230a66c2'/%3E%3Cpath d='M30 42v30h-11V42h11zm-5.5-17a6.5 6.5 0 110 13 6.5 6.5 0 010-13zM42 42h10.5v4.1c1.9-3 5.6-5.1 10.3-5.1 9.4 0 13.2 5.6 13.2 15.2V72H65V58.6c0-5.2-1.6-8-5.6-8-4.3 0-6.9 3-6.9 8V72H42V42z' fill='white'/%3E%3Cpath d='M78 20l6 6-14 14-6-6z' fill='%23e7a33e'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ============================= HEADER ============================= -->
+<header class="site-header">
+  <div class="container header-inner">
+    <a class="brand" href="./" id="brandLink">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 100 100" width="30" height="30"><rect width="100" height="100" rx="22" fill="#0a66c2"/><path d="M30 42v30h-11V42h11zm-5.5-17a6.5 6.5 0 110 13 6.5 6.5 0 010-13zM42 42h10.5v4.1c1.9-3 5.6-5.1 10.3-5.1 9.4 0 13.2 5.6 13.2 15.2V72H65V58.6c0-5.2-1.6-8-5.6-8-4.3 0-6.9 3-6.9 8V72H42V42z" fill="#fff"/><path d="M78 20l6 6-14 14-6-6z" fill="#e7a33e"/></svg>
+      </span>
+      <span class="brand-text">LinkedIn<em>Guardian</em></span>
+    </a>
+    <nav class="header-nav" aria-label="Main navigation">
+      <a href="#how">How it works</a>
+      <a href="#faq">FAQ</a>
+      <button id="settingsBtn" class="btn btn-ghost" type="button" aria-haspopup="dialog">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Settings
+      </button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- ============================= HERO ============================= -->
+  <section class="hero">
+    <div class="container">
+      <h1>Check who you can <span class="accent">really</span> trust on LinkedIn.</h1>
+      <p class="hero-sub">
+        Scammers on LinkedIn promise massive revenue growth, successful M&amp;A deals or quick riches —
+        and sell expensive consulting that leaves clients in distress. LinkedInGuardian analyzes a
+        member's or company's public profile and posts with an AI model and gives you a
+        <strong>trustworthiness rating from 1 to 10</strong>.
+      </p>
+      <ul class="hero-points">
+        <li>🔒 100% client-side — your API keys stay in your browser (cookie)</li>
+        <li>🤖 Works with OpenRouter, OpenAI, Anthropic, Google Gemini or any OpenAI-compatible endpoint</li>
+        <li>📊 Transparent scoring: red flags, green flags, evidence and a plain-language verdict</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============================= CHECKER ============================= -->
+  <section class="checker" id="checker">
+    <div class="container">
+      <div class="card checker-card">
+        <form id="checkForm" autocomplete="off">
+          <label class="field-label" for="profileUrl">LinkedIn URL of the member or company to check</label>
+          <div class="url-row">
+            <div class="url-input-wrap">
+              <svg class="url-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.45 20.45h-3.55v-5.57c0-1.33-.03-3.04-1.85-3.04-1.86 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.47-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zM7.12 20.45H3.56V9h3.56v11.45z"/></svg>
+              <input type="url" id="profileUrl" name="profileUrl"
+                     placeholder="https://www.linkedin.com/in/damir-lisak-a49241207/"
+                     spellcheck="false" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-lg" id="checkBtn">
+              <span class="btn-label">Check now</span>
+            </button>
+          </div>
+          <p class="hint" id="urlHint">Examples: <code>https://www.linkedin.com/in/damir-lisak-a49241207/</code> · <code>https://www.linkedin.com/company/gipsoft/home/</code></p>
+        </form>
+
+        <!-- progress -->
+        <div id="progressWrap" class="progress-wrap" hidden>
+          <div class="progress-track"><div class="progress-bar" id="progressBar"></div></div>
+          <ul class="steps" id="stepsList">
+            <li data-step="parse">Parse LinkedIn URL</li>
+            <li data-step="fetch">Fetch public profile data</li>
+            <li data-step="analyze">AI analysis of posts &amp; profile</li>
+            <li data-step="score">Compute trust score</li>
+          </ul>
+          <p class="progress-note" id="progressNote"></p>
+        </div>
+
+        <!-- error -->
+        <div id="errorBox" class="alert alert-error" hidden></div>
+      </div>
+
+      <!-- ============================= RESULT ============================= -->
+      <div id="resultSection" hidden>
+        <div class="result-grid">
+          <!-- score panel -->
+          <div class="card score-card">
+            <div class="gauge-wrap">
+              <svg class="gauge" viewBox="0 0 200 130" role="img" aria-labelledby="gaugeTitle">
+                <title id="gaugeTitle">Trust score gauge</title>
+                <path class="gauge-bg" d="M20 120 A80 80 0 0 1 180 120" fill="none"/>
+                <path class="gauge-fill" id="gaugeFill" d="M20 120 A80 80 0 0 1 180 120" fill="none"/>
+              </svg>
+              <div class="gauge-center">
+                <div class="gauge-score" id="scoreValue">–</div>
+                <div class="gauge-sub">of 10</div>
+              </div>
+            </div>
+            <div class="score-label" id="scoreLabel">Awaiting analysis</div>
+            <div class="confidence-row">
+              <span class="confidence-label">AI confidence</span>
+              <div class="confidence-track"><div class="confidence-fill" id="confidenceFill"></div></div>
+              <span class="confidence-value" id="confidenceValue">–</span>
+            </div>
+            <div class="subject-box" id="subjectBox" hidden>
+              <img id="subjectAvatar" class="subject-avatar" alt="" hidden>
+              <div>
+                <div class="subject-name" id="subjectName"></div>
+                <div class="subject-meta" id="subjectMeta"></div>
+                <a id="subjectLink" class="subject-link" href="#" target="_blank" rel="noopener noreferrer nofollow">Open on LinkedIn ↗</a>
+              </div>
+            </div>
+          </div>
+
+          <!-- verdict panel -->
+          <div class="card verdict-card">
+            <h2 class="card-title">Verdict</h2>
+            <p class="verdict-text" id="verdictText">Enter a LinkedIn URL above and press <em>Check now</em>.</p>
+            <div class="flags-grid">
+              <div class="flags-col">
+                <h3 class="flags-title red">🚩 Red flags</h3>
+                <ul class="flags-list" id="redFlags"><li class="muted">—</li></ul>
+              </div>
+              <div class="flags-col">
+                <h3 class="flags-title green">✅ Green flags</h3>
+                <ul class="flags-list" id="greenFlags"><li class="muted">—</li></ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- evidence -->
+        <div class="card evidence-card">
+          <div class="evidence-head">
+            <h2 class="card-title">Evidence &amp; signals</h2>
+            <button id="toggleRawBtn" class="btn btn-ghost btn-sm" type="button">Show raw AI output</button>
+          </div>
+          <div class="evidence-grid">
+            <div>
+              <h3 class="flags-title neutral">Evidence cited by the AI</h3>
+              <ul class="flags-list" id="evidenceList"><li class="muted">—</li></ul>
+            </div>
+            <div>
+              <h3 class="flags-title neutral">Signal breakdown</h3>
+              <div class="signals" id="signalsBox"><span class="muted">—</span></div>
+            </div>
+          </div>
+          <pre id="rawOutput" class="raw-output" hidden></pre>
+        </div>
+
+        <div class="result-actions">
+          <button id="copyReportBtn" class="btn btn-ghost" type="button">Copy report</button>
+          <button id="printReportBtn" class="btn btn-ghost" type="button">Print / PDF</button>
+          <button id="newCheckBtn" class="btn btn-primary" type="button">New check</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================= HOW IT WORKS ============================= -->
+  <section class="section" id="how">
+    <div class="container">
+      <h2 class="section-title">How it works</h2>
+      <div class="how-grid">
+        <div class="how-step">
+          <div class="how-num">1</div>
+          <h3>Bring your own keys</h3>
+          <p>Open <em>Settings</em> and paste an API key for your AI provider (e.g. OpenRouter). Optionally add a LinkedIn API access token. Everything is stored only in a cookie in <em>your</em> browser.</p>
+        </div>
+        <div class="how-step">
+          <div class="how-num">2</div>
+          <h3>Paste a LinkedIn URL</h3>
+          <p>Enter the profile or company URL of the person or organization you want to vet. LinkedInGuardian parses the URL and fetches public data.</p>
+        </div>
+        <div class="how-step">
+          <div class="how-num">3</div>
+          <h3>AI analyzes the signals</h3>
+          <p>The language model reviews the profile text and recent posts for classic scam patterns: unverifiable claims, income promises, fake authority, urgency tactics and more.</p>
+        </div>
+        <div class="how-step">
+          <div class="how-num">4</div>
+          <h3>Get a 1–10 trust score</h3>
+          <p>You receive a transparent rating with red flags, green flags, cited evidence and a plain-language verdict you can act on.</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <strong>Important:</strong> LinkedInGuardian is an <em>assistive</em> tool. The AI assessment is an opinion based on public signals — not a fact-check and not a legal judgment. Always do your own due diligence. See the <a href="#faq">FAQ</a> and the <a href="#disclaimer">disclaimer</a>.
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================= FAQ ============================= -->
+  <section class="section section-alt" id="faq">
+    <div class="container">
+      <h2 class="section-title">FAQ</h2>
+
+      <details class="faq-item">
+        <summary>Where are my API keys stored?</summary>
+        <div class="faq-body">
+          <p>Only in a first-party cookie in your browser (<code>lg_settings</code>), optionally encrypted with a master password using AES-GCM via the Web Crypto API. Keys are sent exclusively from your browser to the AI provider you chose. This site has no backend and stores nothing.</p>
+        </div>
+      </details>
+
+      <details class="faq-item">
+        <summary>Which AI providers are supported?</summary>
+        <div class="faq-body">
+          <p>Any OpenAI-compatible chat completions endpoint works out of the box: <strong>OpenRouter</strong>, OpenAI, Groq, Mistral, local LLM servers (LM Studio, Ollama, llama.cpp) — plus native adapters for <strong>Anthropic</strong> and <strong>Google Gemini</strong>.</p>
+        </div>
+      </details>
+
+      <details class="faq-item">
+        <summary>Does the LinkedIn API work from a static website?</summary>
+        <div class="faq-body">
+          <p>Not directly. LinkedIn's official APIs require OAuth 2.0 with a registered application and a server-side token exchange, and they don't send CORS headers to browsers. LinkedInGuardian therefore supports three modes:</p>
+          <ul>
+            <li><strong>Public URL mode (default):</strong> the AI provider fetches public information about the profile from the web. No LinkedIn key needed.</li>
+            <li><strong>LinkedIn token mode:</strong> if you have a valid OAuth access token (e.g. from your own app), it is used to call LinkedIn endpoints that permit it.</li>
+            <li><strong>Proxy mode:</strong> point LinkedInGuardian at your own CORS proxy that injects your LinkedIn credentials server-side.</li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="faq-item">
+        <summary>What does the 1–10 score mean?</summary>
+        <div class="faq-body">
+          <p>1–2 = strong scam indicators · 3–4 = multiple red flags, high caution · 5–6 = mixed signals, verify claims · 7–8 = mostly credible, minor gaps · 9–10 = consistent, verifiable professional presence. The score is the AI's weighted judgment across signals like claims verifiability, posting behavior, engagement authenticity and language patterns.</p>
+        </div>
+      </details>
+
+      <details class="faq-item">
+        <summary>Can I use this to check my own profile?</summary>
+        <div class="faq-body">
+          <p>Yes — many people run themselves through the checker to see how their profile reads to a skeptical potential client.</p>
+        </div>
+      </details>
+
+      <details class="faq-item">
+        <summary>Is this affiliated with LinkedIn?</summary>
+        <div class="faq-body">
+          <p>No. LinkedInGuardian is an independent open-source project, not affiliated with, endorsed by, or sponsored by LinkedIn Corp. "LinkedIn" is a trademark of LinkedIn Corporation.</p>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- ============================= DISCLAIMER ============================= -->
+  <section class="section" id="disclaimer">
+    <div class="container">
+      <h2 class="section-title">Disclaimer</h2>
+      <div class="card disclaimer-card">
+        <p>LinkedInGuardian provides automated, AI-generated assessments of publicly available information. These assessments may be wrong, incomplete or outdated. They do not constitute legal advice, defamation of any person, or a verified fact-check. Decisions made on the basis of a LinkedInGuardian report are your own responsibility.</p>
+        <p>Do not use LinkedInGuardian to harass, defame or target individuals. Respect LinkedIn's User Agreement and applicable privacy laws (GDPR, etc.). Only analyze data you are permitted to process.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ============================= FOOTER ============================= -->
+<footer class="site-footer">
+  <div class="container footer-inner">
+    <div>
+      <strong>LinkedInGuardian</strong> — community trust tooling for LinkedIn.
+      <span class="muted">Not affiliated with LinkedIn Corp.</span>
+    </div>
+    <div class="footer-links">
+      <a href="https://github.com/DamirLisak/LinkedInGuardian" target="_blank" rel="noopener noreferrer">GitHub</a>
+      <a href="https://learn.microsoft.com/en-us/linkedin/" target="_blank" rel="noopener noreferrer">LinkedIn API docs</a>
+      <button id="footerSettingsBtn" class="linklike" type="button">Settings</button>
+    </div>
+  </div>
+</footer>
+
+<!-- ============================= SETTINGS DIALOG ============================= -->
+<div class="dialog-backdrop" id="settingsBackdrop" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="dialog-head">
+      <h2 id="settingsTitle">Settings</h2>
+      <button class="dialog-close" id="settingsCloseBtn" type="button" aria-label="Close settings">✕</button>
+    </div>
+
+    <div class="dialog-body">
+      <div id="settingsAlert" class="alert" hidden></div>
+
+      <!-- AI provider -->
+      <fieldset class="settings-group">
+        <legend>🤖 AI model provider <span class="req">*</span></legend>
+
+        <label class="field-label" for="providerSelect">Provider</label>
+        <select id="providerSelect">
+          <option value="openrouter">OpenRouter (recommended — many models, one key)</option>
+          <option value="openai">OpenAI</option>
+          <option value="anthropic">Anthropic</option>
+          <option value="gemini">Google Gemini</option>
+          <option value="custom">Custom OpenAI-compatible endpoint</option>
+        </select>
+
+        <div id="customEndpointRow" hidden>
+          <label class="field-label" for="customEndpoint">Endpoint base URL</label>
+          <input type="url" id="customEndpoint" placeholder="https://localhost:1234/v1" spellcheck="false">
+          <p class="hint">Must expose <code>POST {base}/chat/completions</code>. CORS must be enabled.</p>
+        </div>
+
+        <label class="field-label" for="apiKeyInput">API key <span class="req">*</span></label>
+        <div class="key-row">
+          <input type="password" id="apiKeyInput" placeholder="sk-or-v1-…" autocomplete="off" spellcheck="false">
+          <button type="button" class="btn btn-ghost btn-sm" id="toggleKeyBtn" aria-label="Show or hide API key">👁</button>
+        </div>
+        <p class="hint" id="keyHint">Get a key at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer">openrouter.ai/keys</a>. Stored only in your browser's cookie.</p>
+
+        <label class="field-label" for="modelInput">Model</label>
+        <div class="key-row">
+          <input type="text" id="modelInput" list="modelList" placeholder="e.g. openai/gpt-4o-mini" spellcheck="false">
+          <button type="button" class="btn btn-ghost btn-sm" id="fetchModelsBtn" title="Load available models from the provider">⟳ Models</button>
+        </div>
+        <datalist id="modelList"></datalist>
+
+        <div class="check-row">
+          <input type="checkbox" id="encryptCheck">
+          <label for="encryptCheck">Encrypt cookie with master password (AES-GCM)</label>
+        </div>
+        <div id="masterPassRow" hidden>
+          <label class="field-label" for="masterPassInput">Master password</label>
+          <div class="key-row">
+            <input type="password" id="masterPassInput" placeholder="Choose a master password" autocomplete="new-password">
+            <button type="button" class="btn btn-ghost btn-sm" id="unlockBtn" hidden>🔓 Unlock</button>
+          </div>
+          <p class="hint">If you forget it, you must clear the cookie and re-enter your keys.</p>
+        </div>
+
+        <button type="button" class="btn btn-ghost btn-sm" id="testAiBtn">Test AI connection</button>
+        <span id="aiTestResult" class="test-result"></span>
+      </fieldset>
+
+      <!-- LinkedIn -->
+      <fieldset class="settings-group">
+        <legend>🔗 LinkedIn data source (optional)</legend>
+
+        <div class="radio-col">
+          <label class="radio-row"><input type="radio" name="liMode" value="public" checked>
+            <span><strong>Public URL mode</strong> — no LinkedIn key required. The AI provider researches public info about the profile.</span></label>
+          <label class="radio-row"><input type="radio" name="liMode" value="token">
+            <span><strong>LinkedIn access token</strong> — use an OAuth 2.0 token from your own LinkedIn app.</span></label>
+          <label class="radio-row"><input type="radio" name="liMode" value="proxy">
+            <span><strong>CORS proxy</strong> — route requests through your own proxy that injects credentials server-side.</span></label>
+        </div>
+
+        <div id="liTokenRow" hidden>
+          <label class="field-label" for="liTokenInput">LinkedIn OAuth access token</label>
+          <input type="password" id="liTokenInput" placeholder="AQX…" autocomplete="off" spellcheck="false">
+          <p class="hint">Create an app at <a href="https://www.linkedin.com/developers/" target="_blank" rel="noopener noreferrer">linkedin.com/developers</a>. See the <a href="https://learn.microsoft.com/en-us/linkedin/" target="_blank" rel="noopener noreferrer">LinkedIn API docs</a>. Browsers are blocked by CORS for most endpoints — a proxy is usually required.</p>
+        </div>
+
+        <div id="liProxyRow" hidden>
+          <label class="field-label" for="liProxyInput">Proxy base URL</label>
+          <input type="url" id="liProxyInput" placeholder="https://my-proxy.example.com/linkedin" spellcheck="false">
+          <p class="hint">The proxy must forward to LinkedIn and return CORS headers. See <code>docs/PROXY.md</code> in the repo for a ready-made Cloudflare Worker.</p>
+        </div>
+      </fieldset>
+
+      <!-- Preferences -->
+      <fieldset class="settings-group">
+        <legend>⚙️ Preferences</legend>
+        <div class="check-row"><input type="checkbox" id="saveHistoryCheck" checked><label for="saveHistoryCheck">Remember recent checks (cookie, max 10)</label></div>
+        <div class="check-row"><input type="checkbox" id="strictModeCheck"><label for="strictModeCheck">Strict mode — bias the score toward skepticism</label></div>
+      </fieldset>
+    </div>
+
+    <div class="dialog-foot">
+      <button type="button" class="btn btn-danger-ghost" id="clearSettingsBtn">Clear all data</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-ghost" id="settingsCancelBtn">Cancel</button>
+      <button type="button" class="btn btn-primary" id="settingsSaveBtn">Save settings</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="js/app.js" defer></script>
+</body>
+</html>
