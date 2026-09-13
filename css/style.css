@@ -155,6 +155,23 @@ a:hover { color: var(--primary-600); }
 .hint { color: var(--muted); font-size: .84rem; margin: 9px 0 0; }
 .hint code { font-size: .95em; }
 
+/* manual paste */
+.paste-details { margin-top: 14px; }
+.paste-details summary {
+  cursor: pointer; color: var(--primary); font-size: .88rem; font-weight: 600;
+  user-select: none;
+}
+.paste-details summary:hover { text-decoration: underline; }
+#manualPaste {
+  width: 100%; margin-top: 10px; padding: 12px; font: inherit; font-size: .9rem;
+  border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--text); resize: vertical;
+}
+#manualPaste:focus {
+  outline: none; border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(10, 102, 194, .14);
+}
+
 /* progress */
 .progress-wrap { margin-top: 22px; }
 .progress-track {

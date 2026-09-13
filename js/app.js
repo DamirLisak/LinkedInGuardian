@@ -365,10 +365,17 @@ const LinkedInData = {
       try {
         return await this.viaProxy(parsed, onNote);
       } catch (e) {
-        onNote(`Proxy request failed (${e.message}) — falling back to public research mode.`);
+        onNote(`Proxy request failed (${e.message}) — falling back to public page fetch.`);
       }
     }
-    return this.viaPublicResearch(parsed, onNote);
+    // Public mode (and fallback): fetch the public LinkedIn page content so the
+    // model has real data instead of relying on its training knowledge.
+    try {
+      return await this.viaPublicFetch(parsed, onNote);
+    } catch (e) {
+      onNote(`Automatic public-page fetch failed (${e.message}) — using AI-knowledge mode. Tip: paste the profile text manually below the URL field.`);
+      return this.viaPublicResearch(parsed, onNote);
+    }
   },
 
   /** Official LinkedIn API via a user-supplied OAuth token (may fail due to CORS/scopes). */
@@ -410,8 +417,37 @@ const LinkedInData = {
   },
 
   /**
-   * Default: no LinkedIn credentials. We hand the URL to the LLM provider and let
-   * the model research public information about the profile/company.
+   * Fetch the public LinkedIn page through the r.jina.ai reader proxy
+   * (free, CORS-enabled, no key required for basic use). This gives the
+   * model real profile content: name, headline, about, experience, posts.
+   */
+  async viaPublicFetch(parsed, onNote) {
+    onNote("Fetching public LinkedIn page content…");
+    const readerUrl = `https://r.jina.ai/${parsed.canonical}`;
+    const res = await fetch(readerUrl, { headers: { "Accept": "text/plain" } });
+    if (!res.ok) throw await httpError(res);
+    const body = await res.text();
+
+    // Detect LinkedIn auth walls / empty renders. Real profile pages contain
+    // signals like "Experience", "Education", "Connect" — auth walls do not.
+    const low = body.toLowerCase();
+    const wallMarkers = ["sign up | linkedin", "sign in | linkedin", "join linkedin", "sign in or join"];
+    const profileSignals = ["experience", "education", "connections", "followers", "about us", "company size", "products"];
+    const isWall = wallMarkers.some((m) => low.includes(m)) &&
+      !profileSignals.some((s) => low.includes(s));
+    if (body.trim().length < 400 || isWall) {
+      throw new Error("LinkedIn returned a login wall instead of profile content");
+    }
+
+    return {
+      source: "Public page fetch (r.jina.ai)",
+      text: `Public LinkedIn page content for ${parsed.canonical}:\n\n${body.slice(0, 14000)}`,
+      note: `Fetched ${body.length.toLocaleString()} characters of public page content.`
+    };
+  },
+
+  /**
+   * Last resort: no data at all. The model may still know prominent profiles.
    */
   async viaPublicResearch(parsed, onNote) {
     onNote("No LinkedIn credentials — the AI will research public information about this URL.");
@@ -464,7 +500,7 @@ function buildUserPrompt(parsed, data, strict) {
 
   const dataBlock = data.text
     ? `=== DATA RETRIEVED (${data.source}) ===\n${data.text.slice(0, 14000)}\n=== END DATA ===`
-    : `=== DATA RETRIEVED ===\nNo direct API data available. Use your knowledge and any public information
+    : `=== DATA RETRIEVED ===\nNo profile content could be retrieved. Use your knowledge and any public information
 you can recall about this exact profile URL and vanity name. If you cannot find reliable information,
 state that clearly, set confidence low (<= 35) and score near 5. Do NOT invent facts, quotes or evidence.
 === END DATA ===`;
@@ -646,6 +682,8 @@ async function runCheck(urlValue) {
   checking = true;
   setCheckEnabled(false);
   $("resultSection").hidden = true;
+  $("errorBox").className = "alert alert-error"; // reset info→error styling
+  $("errorBox").hidden = true;
   Progress.show();
 
   try {
@@ -658,9 +696,32 @@ async function runCheck(urlValue) {
     // 2. fetch data
     Progress.step("fetch");
     Progress.set(22, "Fetching profile data…");
-    const data = await LinkedInData.fetch(parsed, (n) => Progress.set(30, n));
+
+    // Manual paste always wins
+    const manual = ($("manualPaste")?.value || "").trim();
+    let data;
+    if (manual.length >= 80) {
+      data = {
+        source: "Manual paste",
+        text: `Profile text pasted manually by the user for ${parsed.canonical}:\n\n${manual.slice(0, 14000)}`,
+        note: `Analyzing ${manual.length.toLocaleString()} manually pasted characters.`
+      };
+      Progress.set(38, "Using manually pasted profile text.");
+    } else {
+      data = await LinkedInData.fetch(parsed, (n) => Progress.set(30, n));
+    }
     Progress.done("fetch");
     Progress.set(40, `Data source: ${data.source}`);
+
+    // If we ended up with no real data, guide the user to the manual paste.
+    if (!data.text) {
+      $("pasteDetails").open = true;
+      $("manualPaste").focus();
+      showInfo(
+        "LinkedIn blocked automated access (login wall). The AI will assess only what it knows about this profile — " +
+        "for a reliable result, open the profile in another tab, copy the visible text and paste it into the field above the check button."
+      );
+    }
 
     // 3. analyze
     Progress.step("analyze");
@@ -717,7 +778,16 @@ function setCheckEnabled(on) {
 
 function showError(html) {
   const box = $("errorBox");
+  box.className = "alert alert-error";
   box.innerHTML = "⚠️ " + html;
+  box.hidden = false;
+  box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function showInfo(html) {
+  const box = $("errorBox");
+  box.className = "alert alert-info";
+  box.innerHTML = "ℹ️ " + html;
   box.hidden = false;
   box.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
